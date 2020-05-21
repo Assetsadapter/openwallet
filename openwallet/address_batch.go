@@ -97,26 +97,18 @@ func BatchCreateAddressByAccount(account *AssetsAccount, adapter AssetsAdapter, 
 			addrIndex++
 			go func(mAccount *AssetsAccount, mAdapter AssetsAdapter, newIndex int, end chan struct{}, mProducer chan<- AddressCreateResult) {
 				index := newIndex
-				retryTime := 0
-			RETRY:
-				retryTime++
-				result := CreateAddressByAccountWithIndex(mAccount, mAdapter, index, 0)
-				
-				if result.Err != nil {
-					if retryTime >= retryLimit {
-						//生成地址
-						mProducer <- result
-						//释放
-						<-end
-						return
+				var result AddressCreateResult
+				for i := 0; i < retryLimit; i++ {
+					result = CreateAddressByAccountWithIndex(mAccount, mAdapter, index, 0)
+					if result.Err != nil {
+						mu.Lock()
+						addrIndex++
+						index = addrIndex
+						mu.Unlock()
+						continue
 					}
-					mu.Lock()
-					addrIndex++
-					index = addrIndex
-					mu.Unlock()
-					goto RETRY
+					break
 				}
-				
 				mProducer <- result
 				//释放
 				<-end
